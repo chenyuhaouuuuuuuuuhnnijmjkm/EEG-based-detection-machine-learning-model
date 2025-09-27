@@ -122,17 +122,17 @@ def perform_cca_analysis(data, frequencies, sampling_rate):
 #    distance, path = fastdtw(signal1, signal2, dist=euclidean)
 #    return distance, path
 
-#array10 = load_csv_with_filter("D:/研究所/數據/腦波數據檢測資料/0513腦波數據/受測者2/Cotton10Hz_144459.csv")
-#array12 = load_csv_with_filter("D:/研究所/數據/腦波數據檢測資料/0513腦波數據/受測者2/Cotton12Hz_140704.csv")
-#array15 = load_csv_with_filter("D:/研究所/數據/腦波數據檢測資料/0513腦波數據/受測者2/Cotton15Hz-1_140735.csv")
+#array10 = load_csv_with_filter("D:depend om your file")
+#array12 = load_csv_with_filter("D:depend om your file")
+#array15 = load_csv_with_filter("D:depend om your file")
 
-#array10 = load_csv_with_filter("D:/研究所/數據/腦波數據檢測資料/0513腦波數據/受測者2/FloralFoam10Hz_144853.csv")
-#array12 = load_csv_with_filter("D:/研究所/數據/腦波數據檢測資料/0513腦波數據/受測者2/FloralFoam12Hz_141052.csv")
-#array15 = load_csv_with_filter("D:/研究所/數據/腦波數據檢測資料/0513腦波數據/受測者2/FloralFoam15Hz_141415.csv")
+#array10 = load_csv_with_filter("D:depend om your file")
+#array12 = load_csv_with_filter("D:depend om your file")
+#array15 = load_csv_with_filter("D:depend om your file")
 
-array10 = load_csv_with_filter("C:/Users/USER/ArtiseBio/鈴鈞/Cotton10JHz_120436_processed.csv")
-array12 = load_csv_with_filter("C:/Users/USER/ArtiseBio/鈴鈞/Cotton12Hz_120847_processed.csv")
-array15 = load_csv_with_filter("C:/Users/USER/ArtiseBio/鈴鈞/Cotton15Hz_121244_processed.csv")
+array10 = load_csv_with_filter("C:depend om your filev")
+array12 = load_csv_with_filter("C:depend om your file")
+array15 = load_csv_with_filter("C:depend om your file")
 
 print("Array 10 Hz shape:", array10.shape)
 print("Array 12 Hz shape:", array12.shape)
