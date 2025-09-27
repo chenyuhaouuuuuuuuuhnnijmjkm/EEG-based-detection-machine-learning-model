@@ -1,0 +1,253 @@
+import mne
+import numpy as np
+import matplotlib.pyplot as plt
+from scipy.signal import welch, find_peaks, butter, lfilter, resample
+from sklearn.cross_decomposition import CCA
+import pandas as pd
+import scipy.fft
+
+frequency_labels = [10.0, 12.0, 15.0]
+
+#----------------- Data Operation -------------------------
+def butter_bandpass_filter(signal, lowcut, highcut, fs, order=3):
+    nyq = 0.5 * fs
+    low = lowcut / nyq
+    high = highcut / nyq
+    b, a = butter(order, [low, high], btype='band')
+    y = lfilter(b, a, signal, axis=-1)
+    return y
+
+def dataprocess(data, Fs):
+    # Zero-mean
+    for i in range(data.shape[0]):
+        for j in range(data.shape[1]):
+            data[i, j] = data[i, j] - np.mean(data[i, j])
+    data = butter_bandpass_filter(data, 9, 31, Fs)
+    return data
+
+def extract_feature(Ft, Fy, Fs):
+    feature = []
+    for i in range(3):
+        for j in range(5):
+            feature_freq = frequency_labels[i] + (j - 2) * 0.2  # 修改频率步长为0.2Hz
+            idx = np.argmin(np.abs(Ft - feature_freq))  # 找到最接近的频率索引
+            feature_freq_position = Ft[idx]
+            feature_amp = Fy[idx]
+            feature.append((feature_freq_position, feature_amp))
+    return feature
+#----------------- Function -------------------------
+def get_FFT(y, Fs, desired_resolution=0.2):
+    T = 1 / desired_resolution
+    N = int(T * Fs)
+    
+    if len(y) < N:
+        y = np.pad(y, (0, N - len(y)), 'constant')
+    elif len(y) > N:
+        y = y[:N]
+
+    y_f = scipy.fft.fft(y)
+    y_f = 2.0 / N * np.abs(y_f[:N // 2])
+    x_f = np.linspace(0.0, Fs / 2, N // 2)
+    
+    return x_f, y_f
+
+def get_PSD(y, Fs, nperseg=1024):
+    f, Pxx = welch(y, Fs, nperseg=nperseg)
+    return f, Pxx
+
+def generate_harmonics(freq, length, Fs, num_harmonics=9):
+    t = np.linspace(0, length / Fs, length, endpoint=False)
+    harmonics = []
+    for i in range(1, num_harmonics + 1):
+        harmonics.append(np.sin(2 * i * np.pi * freq * t))
+        harmonics.append(np.cos(2 * i * np.pi * freq * t))
+    harmonics = np.vstack(harmonics)
+    return harmonics
+
+def load_csv_with_filter(filepath, delimiter=",", skiprows=10, usecols=range(34)):
+    data = pd.read_csv(filepath, delimiter=delimiter, skiprows=skiprows, usecols=usecols)
+    return data.values
+#----------------- classifation -------------------------
+# 新的 CCA 分析函数
+def perform_cca_analysis(data, frequencies, sampling_rate):
+    def getReferenceSignals(length, target_freq):
+        reference_signals = []
+        t = np.arange(0, (length / sampling_rate), step=1.0 / sampling_rate)
+        reference_signals.append(np.sin(np.pi * 2 * target_freq * t))
+        reference_signals.append(np.cos(np.pi * 2 * target_freq * t))
+
+        # 添加第二諧波的參考訊號
+        reference_signals.append(np.sin(np.pi * 4 * target_freq * t))
+        reference_signals.append(np.cos(np.pi * 4 * target_freq * t))
+
+        # 添加第三諧波的參考訊號
+        reference_signals.append(np.sin(np.pi * 6 * target_freq * t))
+        reference_signals.append(np.cos(np.pi * 6 * target_freq * t))
+
+        # 添加第四諧波的參考訊號
+        reference_signals.append(np.sin(np.pi * 8 * target_freq * t))
+        reference_signals.append(np.cos(np.pi * 8 * target_freq * t))
+        
+        reference_signals = np.array(reference_signals)
+        return reference_signals
+
+    def findCorr(n_components, numpyBuffer, freq):
+        cca = CCA(n_components)
+        corr = np.zeros(n_components)
+        result = np.zeros((freq.shape)[0])
+        for freqIdx in range(0, (freq.shape)[0]):
+            cca.fit(numpyBuffer.T, np.squeeze(freq[freqIdx, :, :]).T)
+            O1_a, O1_b = cca.transform(numpyBuffer.T, np.squeeze(freq[freqIdx, :, :]).T)
+            indVal = 0
+            for indVal in range(0, n_components):
+                corr[indVal] = np.corrcoef(O1_a[:, indVal], O1_b[:, indVal])[0, 1]
+            result[freqIdx] = np.max(corr)
+        return result
+
+    n_components = 1
+    signal_length = data.shape[1]
+    all_reference_signals = np.array([getReferenceSignals(signal_length, freq) for freq in frequencies])
+    cca_results = []
+
+    for i in range(data.shape[0]):
+        segment = data[i].reshape(1, -1) 
+        result = findCorr(n_components, segment, all_reference_signals)
+        max_result = max(result, key=float)
+        predicted_class = np.argmax(result) + 1
+        cca_results.append((predicted_class, max_result))
+    
+    return cca_results
+
+#def Dynamic_Time_Warping(signal1, signal2):
+#    distance, path = fastdtw(signal1, signal2, dist=euclidean)
+#    return distance, path
+
+#array10 = load_csv_with_filter("D:/研究所/數據/腦波數據檢測資料/0513腦波數據/受測者2/Cotton10Hz_144459.csv")
+#array12 = load_csv_with_filter("D:/研究所/數據/腦波數據檢測資料/0513腦波數據/受測者2/Cotton12Hz_140704.csv")
+#array15 = load_csv_with_filter("D:/研究所/數據/腦波數據檢測資料/0513腦波數據/受測者2/Cotton15Hz-1_140735.csv")
+
+#array10 = load_csv_with_filter("D:/研究所/數據/腦波數據檢測資料/0513腦波數據/受測者2/FloralFoam10Hz_144853.csv")
+#array12 = load_csv_with_filter("D:/研究所/數據/腦波數據檢測資料/0513腦波數據/受測者2/FloralFoam12Hz_141052.csv")
+#array15 = load_csv_with_filter("D:/研究所/數據/腦波數據檢測資料/0513腦波數據/受測者2/FloralFoam15Hz_141415.csv")
+
+array10 = load_csv_with_filter("C:/Users/USER/ArtiseBio/鈴鈞/Cotton10JHz_120436_processed.csv")
+array12 = load_csv_with_filter("C:/Users/USER/ArtiseBio/鈴鈞/Cotton12Hz_120847_processed.csv")
+array15 = load_csv_with_filter("C:/Users/USER/ArtiseBio/鈴鈞/Cotton15Hz_121244_processed.csv")
+
+print("Array 10 Hz shape:", array10.shape)
+print("Array 12 Hz shape:", array12.shape)
+print("Array 15 Hz shape:", array15.shape)
+
+Fs = 500
+
+array10 = array10.T
+array12 = array12.T
+array15 = array15.T
+
+multi_data = np.empty((3, 5, 34, 1500))
+
+for i in range(5):
+    multi_data[0, i] = array10[:, 8000 + 4500 * i:9500 + 4500 * i]
+    multi_data[1, i] = array12[:, 8000 + 4500 * i:9500 + 4500 * i]
+    multi_data[2, i] = array15[:, 8000 + 4500 * i:9500 + 4500 * i]
+
+print(multi_data.shape)
+multi_data = dataprocess(multi_data, Fs)
+win_sec = 1
+check = (multi_data[:, :, 29, :] + multi_data[:, :, 31, :]) / 2
+result = np.empty((3, 5))
+
+correlation_results = []
+
+# Define new sampling frequency
+new_Fs = 2500  # 5 times the original frequency to achieve 0.2 Hz resolution
+
+for i in range(3):
+    fig, axs = plt.subplots(3, 5, figsize=(20, 15))
+    plt.subplots_adjust(wspace=0.5, hspace=0.5)
+    fig.suptitle(f'Frequency {frequency_labels[i]}', fontsize=16)
+
+    for j in range(5):
+        all_peaks = []
+        segment_correlations = []
+
+        #for k in [2, 3, 4]:  # 2 3 4
+            #start = 250 * k
+        start = 500
+            #end = 500 + 250 * k
+        end = 1500
+        input_data = check[i, j, start:end] * np.hamming(1000)
+
+            # Resample the data to the new sampling frequency
+        input_data_resampled = resample(input_data, len(input_data) * 5)
+
+            #計算時間扭矩
+            #distance, path = Dynamic_Time_Warping(input_data, signal2)
+            #print(f"DTW distance: {distance}")
+            
+        Pt, Py = get_PSD(input_data_resampled, new_Fs)
+        Ft, Fy = get_FFT(input_data_resampled, new_Fs)
+        select_data = extract_feature(Ft, Fy, new_Fs)
+
+            # 生成谐波信号
+        #harmonics = generate_harmonics(frequency_labels[i], len(input_data_resampled), new_Fs)
+
+            # 进行CCA分析
+        cca_results = perform_cca_analysis(np.array([input_data_resampled]), frequency_labels, new_Fs)
+        segment_correlations.append(cca_results[0][1])
+            
+            # 找到峰值位置
+        peaks, _ = find_peaks(input_data_resampled)
+        peak_freqs = input_data_resampled[peaks]
+        all_peaks.extend(peak_freqs)
+
+            # 设置时间轴
+        time = np.arange(start, end) / Fs
+
+            # 绘制时域信号
+        ax_time = axs[0, j]
+            #ax_time.plot(time, input_data, label=f'Segment {k+1}')
+        ax_time.plot(time, input_data, label=f'Segment')
+        ax_time.set_xlim([0, 3])
+        ax_time.set_title(f'Time Domain - Cycle {j+1}')
+        ax_time.set_xlabel('Time (s)')
+        ax_time.set_ylabel('Amplitude')
+            
+            # 绘制选择特征
+        ax_freq = axs[1, j]
+        feature_freqs, feature_amps = zip(*select_data)
+        ax_freq.plot(Ft, Fy, label='FFT')
+            #ax_freq.plot(feature_freqs, feature_amps, 'b.', label='Selected Features')
+        ax_freq.set_xlim([0, 40])
+            #ax_freq.set_xticks([9.6, 9.8, 10, 10.2, 10.4, 11.6, 11.8, 12, 12.2, 12.4, 14.6, 14.8, 15, 15.2, 15.4])
+            #ax_freq.set_ylim([0, 1.2 * max(Fy)])
+        ax_freq.set_title(f'Frequency Domain - Cycle {j+1}')
+        ax_freq.set_xlabel('Frequency (Hz)')
+        ax_freq.set_ylabel('Amplitude')
+            
+            # 绘制PSD信号
+        ax_PSD = axs[2, j]
+        #ax_PSD.plot(Pt, Py, label=f'Segment {k+1}')
+        ax_PSD.plot(Pt, Py, label=f'Segment')
+        ax_PSD.set_xlim([0, 40])
+        ax_PSD.set_title(f'Frequency Domain - Cycle {j+1}')
+        ax_PSD.set_xlabel('Frequency (Hz)')
+        ax_PSD.set_ylabel('dB')
+            #ax_time.legend(loc='upper right')
+
+             # 设置 y 轴范围
+        if j == 0:
+            ax_PSD.set_ylim([0, 4])
+        else:
+            ax_PSD.set_ylim([0, 0.2])
+            
+            #ax_psd.legend(loc='upper right')
+        
+        result[i, j] = np.max(segment_correlations)
+        correlation_results.append(segment_correlations)
+    
+    plt.subplots_adjust(top=0.9)
+    plt.legend()
+    plt.show()
+
+print(result)
