@@ -1,0 +1,242 @@
+import os 
+import numpy as np
+from scipy.fftpack import fft,ifft
+import matplotlib.pyplot as plt
+#import seaborn
+import scipy.fft
+#import spectrum
+from scipy import signal
+#from get_FFT import *
+import pandas as pd
+import torch 
+import torch.nn as nn
+
+from tensorflow.keras.layers import Dense
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.optimizers import SGD
+from sklearn import preprocessing
+import decimal
+import random
+import time
+import scipy.io as scio
+from scipy.signal import butter, lfilter, welch
+from mne.io import concatenate_raws, read_raw_edf
+import mne
+
+#---------------Data Operation---------------
+def butter_bandpass_filter(signal, lowcut, highcut, fs, order=3):
+    nyq = 0.5 * fs
+    low = lowcut / nyq
+    high = highcut / nyq
+    b, a = butter(order, [low, high], btype='band')
+    y = lfilter(b, a, signal, axis=-1)
+    return y
+
+def dataprocess(data, Fs):
+    # Zero-mean
+    for i in range(data.shape[0]):
+        for j in range(data.shape[1]):
+            data[i, j] = data[i, j] - np.mean(data[i, j])
+    data = butter_bandpass_filter(data, 5, 40, Fs)
+    return data
+
+#--------------Function -----------------------
+def get_FFT(y, Fs):
+    N = np.size(y)
+    record_time = N/Fs
+    dt = 1/Fs # sampling interval
+    x = np.arange(0, record_time, dt)
+    
+    #plot_signal(x,y,'Time Domain of the signal','t(s)','Amplitude','time_pic')
+    
+    y_f = scipy.fft.fft(y)
+    y_f = 2.0/N * np.abs(y_f[:N//2])
+    x_f = np.linspace(0.0, 1.0/(2.0/Fs), N//2)
+    print(x_f.shape)
+    
+    return x_f, y_f
+
+def get_PSD(y, Fs, nperseg=2048):
+    f, Pxx = welch(y, Fs, nperseg=nperseg)
+    return f, Pxx
+
+def snr_spectrum(psd, noise_n_neighbor_freqs=1, noise_skip_neighbor_freqs=1):
+    # Construct a kernel that calculates the mean of the neighboring
+    # frequencies
+    averaging_kernel = np.concatenate(
+        (
+            np.ones(noise_n_neighbor_freqs),
+            np.zeros(2 * noise_skip_neighbor_freqs + 1),
+            np.ones(noise_n_neighbor_freqs),
+        )
+    )
+    averaging_kernel /= averaging_kernel.sum()
+
+    mean_noise = np.apply_along_axis(
+        lambda psd_: np.convolve(psd_, averaging_kernel, mode="valid"), axis=-1, arr=psd
+    )
+
+    edge_width = noise_n_neighbor_freqs + noise_skip_neighbor_freqs
+    pad_width = [(0, 0)] * (mean_noise.ndim - 1) + [(edge_width, edge_width)]
+    mean_noise = np.pad(mean_noise, pad_width=pad_width, constant_values=np.nan)
+
+    return psd / mean_noise
+
+def generate_harmonics(freq, length, Fs, num_harmonics=9):
+    t = np.linspace(0, length / Fs, length, endpoint=False)
+    harmonics = []
+    for i in range(1, num_harmonics + 1):
+        harmonics.append(np.sin(2 * i * np.pi * freq * t))
+        harmonics.append(np.cos(2 * i * np.pi * freq * t))
+    harmonics = np.vstack(harmonics)
+    return harmonics
+
+def load_csv_with_filter(filepath, delimiter=",", skiprows=10, usecols=range(34)):
+    data = pd.read_csv(filepath, delimiter=delimiter, skiprows=skiprows, usecols=usecols)
+    return data.values
+#---------------Input Data-------------
+array10 = load_csv_with_filter("C:/Users/USER/ArtiseBio/鈴鈞/Cotton10JHz_120436_processed.csv")
+array12 = load_csv_with_filter("C:/Users/USER/ArtiseBio/鈴鈞/Cotton12Hz_120847_processed.csv")
+array15 = load_csv_with_filter("C:/Users/USER/ArtiseBio/鈴鈞/Cotton15Hz_121244_processed.csv")
+
+#array10 = load_csv_with_filter("D:/研究所/數據/腦波數據檢測資料/0513腦波數據/受測者1/FloralFoam10Hz-1_142208.csv")
+#array12 = load_csv_with_filter("D:/研究所/數據/腦波數據檢測資料/0513腦波數據/受測者1/FloralFoam12Hz_143225.csv")
+#array15 = load_csv_with_filter("D:/研究所/數據/腦波數據檢測資料/0513腦波數據/受測者1/FloralFoam15Hz_143414.csv")
+
+#array10 = load_csv_with_filter("D:/研究所/數據/腦波數據檢測資料/0513腦波數據/受測者1/AllFloralFoam10Hz_142541.csv")
+#array12 = load_csv_with_filter("D:/研究所/數據/腦波數據檢測資料/0513腦波數據/受測者1/AllFloralFoam12Hz_143549.csv")
+#array15 = load_csv_with_filter("D:/研究所/數據/腦波數據檢測資料/0513腦波數據/受測者1/AllFloralFoam15Hz_143735.csv")
+
+print("Array 10 Hz shape:", array10.shape)
+print("Array 12 Hz shape:", array12.shape)
+print("Array 15 Hz shape:", array15.shape)
+
+Fs = 500
+
+array10 = array10.T
+array12 = array12.T
+array15 = array15.T
+
+multi_data = np.empty((3, 5, 34, 3000))
+
+for i in range(5):
+    #multi_data[0, i] = array10[:, 8000 + 4500 * i:9500 + 4500 * i]
+    #multi_data[1, i] = array12[:, 8000 + 4500 * i:9500 + 4500 * i]
+    #multi_data[2, i] = array15[:, 8000 + 4500 * i:9500 + 4500 * i]
+
+    multi_data[0, i] = array10[:, 8000 + 6000 * i:11000 + 6000 * i]
+    multi_data[1, i] = array12[:, 8000 + 6000 * i:11000 + 6000 * i]
+    multi_data[2, i] = array15[:, 8000 + 6000 * i:11000 + 6000 * i]
+
+print(multi_data.shape)
+multi_data = dataprocess(multi_data, Fs)
+
+#---------------Data Operation---------
+Dataset = np.array((3, 5, 3000))
+Datasets = (multi_data[:, :, 29, :] + multi_data[:, :, 31, :]) / 2
+
+#PSD_pos = [196,198,200,202,204,236,238,240,242,244,296,298,300,302,304,396,398,400,402,404,476,478,480,482,484,596,598,600,602,604]
+FFT_pos = [58,59,60,61,62,70,71,72,73,74,88,89,90,91,92,118,119,120,121,122,142,143,144,145,146,178,179,180,181,182]
+FFT_pos_2s = (np.array(FFT_pos)*2).tolist()
+PSD_Dataset = np.zeros((3, 5, 30), dtype=float)
+SNR_Dataset = np.zeros((3, 5, 30), dtype=float)
+FFT_Dataset = np.zeros((3, 5, len(FFT_pos_2s)), dtype=float) 
+
+frequency_labels = [10.0, 12.0, 15.0]
+PSD_mean  = np.zeros((3, 30))  
+snrs_mean = np.zeros((3, 30)) 
+
+for i in range(3):
+    fig, ax = plt.subplots(figsize=(20, 15))
+    plt.subplots_adjust(wspace=1.0, hspace=1.0)
+    fig.suptitle(f'Frequency {frequency_labels[i]}', fontsize=16)
+    ax.set_xticks(np.arange(0, 30, 1), ['9.666' , '9.833', '10.0'  , '10.167', '10.334', '11.666', '11.833', '12.0'  , '12.167',
+                                        '12.334','14.666', '14.833', '15.0'  , '15.167', '15.334', '19.666', '19.833', '20.0'  ,
+                                        '20.167','20.334', '23.666', '23.833', '24.0'  , '24.167', '24.334', '29.666', '29.833',
+                                        '30'    ,'30.167', '30.334'], fontsize=10)
+    ax.set_title(f'Frequency Domain - Cycle')
+    ax.set_xlabel('Frequency (Hz)')
+    ax.set_ylabel('Amplitude')
+
+    #freq_data = []
+
+    for j in [0, 1, 2, 3, 4]:
+        start = 0
+        end = 3000
+        input_data = Datasets[i, j, start:end]
+
+        Ft, Fy = get_FFT(input_data, Fs)
+        _, Py = get_PSD(input_data, Fs)
+        snrs = snr_spectrum(Py, noise_n_neighbor_freqs=3, noise_skip_neighbor_freqs=1)
+
+        ax.plot(['9.666' , '9.833', '10.0'  , '10.167', '10.334', '11.666', '11.833', '12.0'  , '12.167',
+                 '12.334','14.666', '14.833', '15.0'  , '15.167', '15.334', '19.666', '19.833', '20.0'  ,
+                 '20.167','20.334', '24.666', '24.833', '24.0'  , '24.167', '24.334', '29.666', '29.833',
+                 '30'    ,'30.167', '30.334'], Fy[FFT_pos_2s], linewidth=2.5, marker='o', label='FFT')
+        FFT_Dataset[i, j, :] = Fy[FFT_pos]  # 将 Fy[FFT_pos_2s] 存储在 FFT_Dataset 对应位置
+        PSD_Dataset[i, j, :] = Py[FFT_pos]
+        SNR_Dataset[i, j, :] = snrs[FFT_pos]
+
+    PSD_mean[i] = np.mean(PSD_Dataset[i], axis=0)  # 計算每個頻率的 PSD 平均值
+    snrs_mean[i] = np.mean(SNR_Dataset[i], axis=0)  # 計算每個頻率的 SNR 平均值
+    
+    plt.subplots_adjust(top=0.9)
+    plt.legend()
+    plt.show()
+
+#---------------Train Dataset----------
+Train_X = np.array((3, 5, 30))
+Train_Xs = FFT_Dataset
+Test_Y = ([1, 0, 0],[1, 0, 0],[1, 0, 0])
+
+# 合併訓練數據
+X_train = np.concatenate([Train_Xs[0,0:3], Train_Xs[1,0:3], Train_Xs[2,0:3]], axis=0)
+# 生成對應標籤 
+Y_train = np.array([[1,0,0]]*3 + [[1,0,0]]*3 + [[1,0,0]]*3)
+
+# 測試數據
+X_test = np.concatenate([Train_Xs[0,4].reshape(1,-1), Train_Xs[1,4].reshape(1,-1), Train_Xs[2,4].reshape(1,-1)], axis=0)
+
+y_test = [Test_Y[0], Test_Y[0], Test_Y[0]]
+
+class_names = ["10 Hz","12 Hz","15 Hz"]
+
+#---------------NN Model---------------
+model = Sequential()
+model.add(Dense(units=32, input_shape=(30,), kernel_initializer='normal', activation='relu'))
+model.add(Dense(units=16, activation='relu'))
+model.add(Dense(units=3, activation='softmax'))
+
+model.compile(loss='binary_crossentropy', optimizer=SGD(learning_rate=0.01), metrics=['accuracy'])
+print(model.summary())
+
+#---------------Train Model------------
+history = model.fit(x=X_train, y=Y_train, epochs=5000, batch_size=2, verbose=2)
+#print(history.history)
+
+#---------------Test Model-------------
+y_pred = model.predict(X_test)
+print("Predicted values:", y_pred)
+print("PSD 平均值:", PSD_mean)
+print("SNR 平均值:", snrs_mean)
+
+#---------------Plot Model--------------
+#plt.figure(figsize=(8, 6))
+#plt.scatter(range(len(y_test)), y_test, c='b', linewidth=2.0, label='Actual')
+#plt.scatter(range(len(y_pred)), y_pred, c='r', linewidth=2.0, label='Predicted')
+#plt.xlabel('Frequency')
+#plt.ylabel('Value')
+#plt.title('Actual vs Predicted Values')
+plt.legend()
+plt.show()
+
+plt.plot(history.history['accuracy'])
+plt.title('Model Acceracy')
+plt.ylabel('Acceracy')
+plt.xlabel('Epoch')
+plt.show()
+plt.plot(history.history['loss'])
+plt.title('Model loss')
+plt.ylabel('loss')
+plt.xlabel('Epoch')
+plt.show()
