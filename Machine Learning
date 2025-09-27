@@ -95,17 +95,17 @@ def load_csv_with_filter(filepath, delimiter=",", skiprows=10, usecols=range(34)
     data = pd.read_csv(filepath, delimiter=delimiter, skiprows=skiprows, usecols=usecols)
     return data.values
 #---------------Input Data-------------
-array10 = load_csv_with_filter("C:/Users/USER/ArtiseBio/鈴鈞/Cotton10JHz_120436_processed.csv")
-array12 = load_csv_with_filter("C:/Users/USER/ArtiseBio/鈴鈞/Cotton12Hz_120847_processed.csv")
-array15 = load_csv_with_filter("C:/Users/USER/ArtiseBio/鈴鈞/Cotton15Hz_121244_processed.csv")
+array10 = load_csv_with_filter("C:depend on your file")
+array12 = load_csv_with_filter("C:depend on your file")
+array15 = load_csv_with_filter("C:depend on your file")
 
-#array10 = load_csv_with_filter("D:/研究所/數據/腦波數據檢測資料/0513腦波數據/受測者1/FloralFoam10Hz-1_142208.csv")
-#array12 = load_csv_with_filter("D:/研究所/數據/腦波數據檢測資料/0513腦波數據/受測者1/FloralFoam12Hz_143225.csv")
-#array15 = load_csv_with_filter("D:/研究所/數據/腦波數據檢測資料/0513腦波數據/受測者1/FloralFoam15Hz_143414.csv")
+#array10 = load_csv_with_filter("D:depend on your file")
+#array12 = load_csv_with_filter("D:depend on your file")
+#array15 = load_csv_with_filter("D:depend on your file")
 
-#array10 = load_csv_with_filter("D:/研究所/數據/腦波數據檢測資料/0513腦波數據/受測者1/AllFloralFoam10Hz_142541.csv")
-#array12 = load_csv_with_filter("D:/研究所/數據/腦波數據檢測資料/0513腦波數據/受測者1/AllFloralFoam12Hz_143549.csv")
-#array15 = load_csv_with_filter("D:/研究所/數據/腦波數據檢測資料/0513腦波數據/受測者1/AllFloralFoam15Hz_143735.csv")
+#array10 = load_csv_with_filter("D:depend on your file")
+#array12 = load_csv_with_filter("D:depend on your file")
+#array15 = load_csv_with_filter("D:depend on your file")
 
 print("Array 10 Hz shape:", array10.shape)
 print("Array 12 Hz shape:", array12.shape)
